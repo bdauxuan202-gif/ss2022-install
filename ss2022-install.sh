@@ -379,27 +379,23 @@ create_config() {
         info "已备份旧配置"
     fi
 
-    local server_bind='["0.0.0.0"]'
+    # IPv6: 监听 :: 通常可同时接受 IPv4(视系统 net.ipv6.bindv6only)
+    local server_addr="0.0.0.0"
     if [[ "${ENABLE_IPV6}" == "true" ]]; then
-        server_bind='["0.0.0.0","::"]'
+        server_addr="::"
     fi
 
     cat > "$CONFIG_FILE" <<EOF
 {
-    "servers": [
-        {
-            "server": ${server_bind},
-            "server_port": ${PORT},
-            "password": "${PASSWORD}",
-            "method": "${METHOD}",
-            "timeout": 300,
-            "mode": "tcp_and_udp"
-        }
-    ],
+    "server": "${server_addr}",
+    "server_port": ${PORT},
+    "password": "${PASSWORD}",
+    "method": "${METHOD}",
+    "timeout": 300,
     "mode": "tcp_and_udp",
+    "fast_open": true,
     "nofile": 51200,
-    "ipv6_first": false,
-    "fast_open": true
+    "ipv6_first": false
 }
 EOF
     chmod 600 "$CONFIG_FILE"
