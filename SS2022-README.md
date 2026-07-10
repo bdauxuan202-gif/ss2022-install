@@ -1,77 +1,116 @@
-# Shadowsocks 2022 一键安装脚本
+# Shadowsocks 2022 一键安装 / 管理脚本
 
-## ⚠️ 安全提醒
-**请立即撤销你在对话中暴露的 GitHub Token！** 前往 GitHub Settings → Developer settings → Personal access tokens 删除并重新生成。
+基于 [shadowsocks-rust](https://github.com/shadowsocks/shadowsocks-rust)，支持自定义参数、菜单管理、更新与卸载。
 
-## 快速使用
+## 一键安装
 
 ```bash
-# 上传到服务器后
+wget -O ss2022-install.sh https://raw.githubusercontent.com/bdauxuan202-gif/ss2022-install/main/ss2022-install.sh && chmod +x ss2022-install.sh && sudo ./ss2022-install.sh
+```
+
+或直接安装（不进菜单）：
+
+```bash
+wget -O ss2022-install.sh https://raw.githubusercontent.com/bdauxuan202-gif/ss2022-install/main/ss2022-install.sh
 chmod +x ss2022-install.sh
-sudo ./ss2022-install.sh
+sudo ./ss2022-install.sh install
 ```
 
-脚本会交互式询问 **端口、加密方式、密钥** 三个参数。
+## 功能
 
-## 非交互式安装
+| 功能 | 说明 |
+|------|------|
+| 安装/重装 | 交互或环境变量配置端口、加密、密钥、IPv6 |
+| 自动最新版 | `SS_VERSION=latest` 从 GitHub 拉取最新 release |
+| 下载镜像 | 主链接失败自动走 `ghfast.top` 加速 |
+| 端口检测 | 安装前检查端口占用 |
+| 密钥校验 | 校验 Base64 解码长度是否符合 SS2022 |
+| systemd | 开机自启 + 失败重启 + 安全加固 |
+| 防火墙 | firewalld / ufw / iptables 自动放行 |
+| BBR 优化 | 写入 sysctl，尽量开启 BBR |
+| 连接信息 | 输出 SS 链接；有 `qrencode` 时输出二维码 |
+| 改配置 | 端口 / 加密 / 密钥 / IPv6 在线修改 |
+| 更新内核 | 不丢配置，只更新二进制并重启 |
+| 卸载 | 清理服务、二进制、配置 |
 
-通过环境变量跳过交互：
+## 命令
 
 ```bash
-SS_PORT=12345 SS_METHOD=2022-blake3-aes-256-gcm SS_PASSWORD=auto sudo -E ./ss2022-install.sh
+sudo ./ss2022-install.sh              # 菜单
+sudo ./ss2022-install.sh install      # 安装
+sudo ./ss2022-install.sh update       # 更新
+sudo ./ss2022-install.sh info         # 连接信息
+sudo ./ss2022-install.sh config       # 改配置
+sudo ./ss2022-install.sh restart      # 重启
+sudo ./ss2022-install.sh status       # 状态
+sudo ./ss2022-install.sh uninstall    # 卸载
+./ss2022-install.sh help              # 帮助
 ```
 
-| 环境变量 | 说明 | 默认值 |
-|---|---|---|
-| `SS_PORT` | 监听端口 | 8388 |
-| `SS_METHOD` | 加密方式 | 2022-blake3-aes-256-gcm |
-| `SS_PASSWORD` | 密钥 (Base64)，`auto` = 自动生成 | 自动生成 |
-| `SS_VERSION` | shadowsocks-rust 版本号 | 1.21.2 |
+## 非交互安装
 
-## 可修改参数
+```bash
+SS_PORT=443 \
+SS_METHOD=2022-blake3-aes-256-gcm \
+SS_PASSWORD=auto \
+SS_VERSION=latest \
+ENABLE_IPV6=false \
+sudo -E ./ss2022-install.sh install
+```
 
-直接编辑脚本头部的默认值：
+| 变量 | 说明 | 默认 |
+|------|------|------|
+| `SS_PORT` | 端口 | 8388 |
+| `SS_METHOD` | 加密 | 2022-blake3-aes-256-gcm |
+| `SS_PASSWORD` | Base64 密钥，`auto` 自动生成 | 自动生成 |
+| `SS_VERSION` | `latest` 或具体版本号 | latest |
+| `ENABLE_IPV6` | 是否监听 IPv6 | false |
+| `MIRROR_PREFIX` | 下载前缀加速，如 `https://ghfast.top/` | 空 |
+
+## 修改默认参数
+
+编辑脚本顶部：
 
 ```bash
 DEFAULT_PORT=8388
 DEFAULT_METHOD="2022-blake3-aes-256-gcm"
-DEFAULT_PASSWORD=""     # 留空=自动生成
-SS_VERSION="1.21.2"
+DEFAULT_PASSWORD=""
+SS_VERSION="latest"
+ENABLE_IPV6="false"
+MIRROR_PREFIX=""
 ```
 
-或修改运行中的配置：
+或改线上配置后重启：
 
 ```bash
 sudo vim /etc/shadowsocks-rust/config.json
 sudo systemctl restart shadowsocks-rust
 ```
 
-## 支持的加密方式
+客户端信息保存在：`/etc/shadowsocks-rust/client-info.txt`
 
-| 方式 | 密钥长度 | 说明 |
-|---|---|---|
-| `2022-blake3-aes-256-gcm` | 32字节 | 推荐，安全性最高 |
-| `2022-blake3-aes-128-gcm` | 16字节 | 性能稍好 |
-| `2022-blake3-chacha20-poly1305` | 32字节 | 适合无 AES 硬件加速设备 |
+## 加密方式
 
-## 服务管理
-
-```bash
-sudo systemctl start   shadowsocks-rust   # 启动
-sudo systemctl stop    shadowsocks-rust   # 停止
-sudo systemctl restart shadowsocks-rust   # 重启
-sudo systemctl status  shadowsocks-rust   # 状态
-journalctl -u shadowsocks-rust -f         # 实时日志
-```
-
-## 卸载
-
-```bash
-sudo ./ss2022-install.sh uninstall
-```
+| method | 密钥解码长度 | 说明 |
+|--------|--------------|------|
+| `2022-blake3-aes-256-gcm` | 32 字节 | 推荐 |
+| `2022-blake3-aes-128-gcm` | 16 字节 | 略快 |
+| `2022-blake3-chacha20-poly1305` | 32 字节 | 无 AES 加速时适用 |
 
 ## 系统支持
 
 - Debian / Ubuntu
-- CentOS / RHEL / Rocky / Alma / Fedora
-- 架构: x86_64, aarch64, armv7
+- CentOS / RHEL / Rocky / Alma / Fedora / Amazon Linux
+- Alpine（基础依赖）
+- 架构: x86_64 / aarch64 / armv7
+
+## 服务管理
+
+```bash
+systemctl start|stop|restart|status shadowsocks-rust
+journalctl -u shadowsocks-rust -f
+```
+
+## 云安全组
+
+脚本只能改本机防火墙。使用云服务器时，请在控制台安全组放行对应 **TCP + UDP** 端口。
