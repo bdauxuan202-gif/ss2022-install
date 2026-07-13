@@ -52,10 +52,11 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
-ok()    { echo -e "${GREEN}[ OK ]${NC} $*"; }
+# 全部输出到 stderr，避免被 $(...) 命令替换捕获污染返回值（如 resolve_version）
+info()  { echo -e "${GREEN}[INFO]${NC} $*" >&2; }
+warn()  { echo -e "${YELLOW}[WARN]${NC} $*" >&2; }
+error() { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
+ok()    { echo -e "${GREEN}[ OK ]${NC} $*" >&2; }
 
 # ============================================================
 # 基础工具
@@ -107,8 +108,11 @@ resolve_version() {
     fi
     info "正在获取 shadowsocks-rust 最新版本..."
     local ver
+    # 注意: log 绝不能放进 $(...) 命令替换里；本函数内部日志已统一走 stderr
     ver=$(curl -fsSL --connect-timeout 10 "$GITHUB_API" 2>/dev/null \
-        | grep -oE '"tag_name":\s*"v[^"]+"' | head -1 | sed 's/.*"v//;s/"//') || true
+        | grep -oE '"tag_name":[[:space:]]*"v[^"]+"' | head -1 \
+        | sed -E 's/.*"v([0-9]+\.[0-9]+\.[0-9]+).*/\1/') || true
+    ver=$(printf '%s' "${ver}" | tr -d '[:space:]' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
     if [[ -z "$ver" ]]; then
         warn "无法获取最新版本，回退到 1.24.0"
         ver="1.24.0"
