@@ -253,6 +253,10 @@ download_and_install() {
         fi
     fi
 
+    verify_checksum "$filename" \
+        "${GITHUB_RELEASE}/v${version}/${filename}.sha256" \
+        "${filename}"
+
     info "解压安装..."
     tar -xf "$filename"
     # 兼容压缩包内是否有子目录
@@ -268,6 +272,33 @@ download_and_install() {
     [[ -f "${bin_dir}/ssservice" ]] && install -m 755 "${bin_dir}/ssservice" "${INSTALL_DIR}/ssservice" || true
 
     ok "已安装: $("${INSTALL_DIR}/ssserver" --version | head -1)"
+}
+
+# 校验下载文件的 SHA256（发行方提供的 <文件名>.sha256 侧车文件）。
+# 侧车下载/解析失败时仅告警放行，拿到期望值后必须严格匹配，防止下载
+# 被篡改或遭中间人替换成恶意二进制。
+verify_checksum() {
+    local file="$1" sidecar_url="$2" asset_name="$3"
+    local expected actual sidecar
+    sidecar=$(curl -fsSL --connect-timeout 10 "$sidecar_url" 2>/dev/null) || true
+    expected=$(printf '%s' "$sidecar" | grep -oE '[0-9a-fA-F]{64}' | head -1 || true)
+    if [[ -z "$expected" ]]; then
+        warn "未能获取 ${asset_name} 官方 SHA256，跳过校验（建议手动核对）"
+        return 0
+    fi
+    if command_exists sha256sum; then
+        actual=$(sha256sum "$file" | awk '{print $1}')
+    elif command_exists shasum; then
+        actual=$(shasum -a 256 "$file" | awk '{print $1}')
+    else
+        warn "系统无 sha256sum/shasum，跳过校验（建议安装 coreutils）"
+        return 0
+    fi
+    expected="${expected,,}"; actual="${actual,,}"
+    if [[ "$expected" != "$actual" ]]; then
+        error "SHA256 校验失败: ${asset_name}\n  期望: ${expected}\n  实际: ${actual}\n  文件可能被篡改或下载不完整，已中止安装"
+    fi
+    ok "SHA256 校验通过: ${asset_name}"
 }
 
 # ============================================================
